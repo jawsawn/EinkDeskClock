@@ -1,5 +1,10 @@
 package com.example.myapplication.screens
 
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -36,6 +40,7 @@ import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -70,9 +75,36 @@ private val SEGMENT_MAP = mapOf(
 )
 
 /**
- * Calculates ClockState from local system epoch time.
+ * Reads battery level and charging state without continuous listeners.
  */
-fun calculateCurrentClockState(timeMs: Long = System.currentTimeMillis()): ClockState {
+fun getBatteryInfo(context: Context): Pair<Int, Boolean> {
+    val batteryStatus: Intent? = context.registerReceiver(
+        null,
+        IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+    )
+    val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+    val status = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+
+    val pct = if (level >= 0 && scale > 0) {
+        (level * 100f / scale.toFloat()).toInt().coerceIn(0, 100)
+    } else {
+        100
+    }
+
+    val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+            status == BatteryManager.BATTERY_STATUS_FULL
+
+    return Pair(pct, isCharging)
+}
+
+/**
+ * Calculates ClockState from local system epoch time and battery info.
+ */
+fun calculateCurrentClockState(
+    context: Context,
+    timeMs: Long = System.currentTimeMillis()
+): ClockState {
     val calendar = Calendar.getInstance().apply {
         timeInMillis = timeMs
     }
@@ -94,6 +126,7 @@ fun calculateCurrentClockState(timeMs: Long = System.currentTimeMillis()): Clock
     }
 
     val moonPhase = MoonPhaseCalculator.calculateMoonPhase(timeMs)
+    val (batteryLevel, isCharging) = getBatteryInfo(context)
 
     return ClockState(
         hours = hours,
@@ -102,12 +135,13 @@ fun calculateCurrentClockState(timeMs: Long = System.currentTimeMillis()): Clock
         dayOfMonth = dayOfMonth,
         dayOfWeek = dayOfWeekStr,
         moonPhase = moonPhase,
+        batteryLevel = batteryLevel,
+        isCharging = isCharging
     )
 }
 
 /**
  * Canvas composable rendering a single retro 7-segment digit.
- * Renders unlit background segments (`88`) behind active segments for physical LCD look.
  */
 @Composable
 fun SevenSegmentDigit(
@@ -115,15 +149,15 @@ fun SevenSegmentDigit(
     modifier: Modifier = Modifier,
     activeColor: Color = LcdActiveColor,
     unlitColor: Color = LcdUnlitColor,
-    slantRatio: Float = -0.06f
+    slantRatio: Float = -0.05f
 ) {
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
         if (w <= 0f || h <= 0f) return@Canvas
 
-        val t = w * 0.16f
-        val g = t * 0.22f
+        val t = w * 0.13f
+        val g = t * 0.18f
 
         val activeMap = SEGMENT_MAP[digitChar] ?: BooleanArray(7) { false }
 
@@ -210,8 +244,7 @@ fun SevenSegmentDigit(
 }
 
 /**
- * Top Screen 24-hour digital time display: `HH MM` with subtle `88 88` unlit background segments
- * and a small bold "TIME" label pinned in the upper-right corner.
+ * Top Screen 24-hour time display: `HH MM` with "TIME" pinned in upper-right corner.
  */
 @Composable
 fun TopTimeScreen(
@@ -222,7 +255,7 @@ fun TopTimeScreen(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 12.dp, start = 16.dp, end = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         // Pinned "TIME" label in upper-right corner
         Text(
@@ -230,60 +263,61 @@ fun TopTimeScreen(
             style = TextStyle(
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 color = LcdActiveColor
             ),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 2.dp, end = 4.dp)
+                .padding(top = 4.dp, end = 8.dp)
         )
 
-        // 24-hour time display: HH MM with 7-segment digits
+        // 24-hour time display: HH MM centered with elegant proportional height
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .fillMaxWidth(0.9f)
+                .fillMaxWidth(0.85f)
+                .fillMaxHeight(0.82f)
                 .align(Alignment.Center)
-                .padding(top = 18.dp)
+                .padding(top = 16.dp)
         ) {
             SevenSegmentDigit(
                 digitChar = hours.getOrElse(0) { '0' },
                 modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(0.55f)
+                    .fillMaxHeight()
+                    .aspectRatio(0.52f)
             )
             Spacer(modifier = Modifier.width(6.dp))
             SevenSegmentDigit(
                 digitChar = hours.getOrElse(1) { '0' },
                 modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(0.55f)
+                    .fillMaxHeight()
+                    .aspectRatio(0.52f)
             )
 
-            // Spaced gap between HH and MM
-            Spacer(modifier = Modifier.width(24.dp))
+            // Gap between HH and MM
+            Spacer(modifier = Modifier.width(28.dp))
 
             SevenSegmentDigit(
                 digitChar = minutes.getOrElse(0) { '0' },
                 modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(0.55f)
+                    .fillMaxHeight()
+                    .aspectRatio(0.52f)
             )
             Spacer(modifier = Modifier.width(6.dp))
             SevenSegmentDigit(
                 digitChar = minutes.getOrElse(1) { '0' },
                 modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(0.55f)
+                    .fillMaxHeight()
+                    .aspectRatio(0.52f)
             )
         }
     }
 }
 
 /**
- * Middle Divider Bar: Solid dark horizontal bar spanning width with high-contrast white text labels:
- * MONTH, DATE, DAY, MOON PHASE.
+ * Middle Divider Bar: Solid dark bar with high-contrast white labels:
+ * Grid 1&2 (2.0f): DATE MONTH | Grid 3 (1.0f): DAY | Grid 4 (1.0f): MOON PHASE | Grid 5 (1.0f): BATTERY
  */
 @Composable
 fun MiddleDividerBar(
@@ -293,30 +327,31 @@ fun MiddleDividerBar(
         modifier = modifier
             .fillMaxWidth()
             .background(LcdActiveColor)
-            .padding(vertical = 7.dp, horizontal = 12.dp),
+            .padding(vertical = 8.dp, horizontal = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Grid 1 & 2: DATE MONTH (2.0 Grid Units)
         Row(
-            modifier = Modifier.weight(1.1f),
+            modifier = Modifier.weight(2.0f),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "MONTH",
-                style = TextStyle(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = Color.White
-                )
-            )
             Text(
                 text = "DATE",
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
+                    color = Color.White
+                )
+            )
+            Text(
+                text = "MONTH",
+                style = TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
                     color = Color.White
                 )
             )
@@ -324,39 +359,61 @@ fun MiddleDividerBar(
 
         Box(
             modifier = Modifier
-                .width(1.dp)
-                .height(14.dp)
+                .width(1.5.dp)
+                .height(16.dp)
                 .background(Color.White.copy(alpha = 0.4f))
         )
 
+        // Grid 3: DAY (1.0 Grid Unit)
         Text(
             text = "DAY",
             style = TextStyle(
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = Color.White
             ),
-            modifier = Modifier.weight(0.7f),
+            modifier = Modifier.weight(1.0f),
             textAlign = TextAlign.Center
         )
 
         Box(
             modifier = Modifier
-                .width(1.dp)
-                .height(14.dp)
+                .width(1.5.dp)
+                .height(16.dp)
                 .background(Color.White.copy(alpha = 0.4f))
         )
 
+        // Grid 4: MOON PHASE (1.0 Grid Unit)
         Text(
             text = "MOON PHASE",
             style = TextStyle(
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = Color.White
             ),
-            modifier = Modifier.weight(1.2f),
+            modifier = Modifier.weight(1.0f),
+            textAlign = TextAlign.Center
+        )
+
+        Box(
+            modifier = Modifier
+                .width(1.5.dp)
+                .height(16.dp)
+                .background(Color.White.copy(alpha = 0.4f))
+        )
+
+        // Grid 5: BATTERY (1.0 Grid Unit)
+        Text(
+            text = "BATTERY",
+            style = TextStyle(
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = Color.White
+            ),
+            modifier = Modifier.weight(1.0f),
             textAlign = TextAlign.Center
         )
     }
@@ -428,16 +485,17 @@ fun MoonIcon(
             color = activeColor,
             radius = radius,
             center = Offset(cx, cy),
-            style = Stroke(width = 2.dp.toPx())
+            style = Stroke(width = 2.5.dp.toPx())
         )
     }
 }
 
 /**
- * Bottom Screen divided into 3 sections:
- * 1. Date: MM/DD format
- * 2. Day of Week: 3-letter uppercase abbreviation
- * 3. Moon Phase: Visual moon icon alongside short descriptor
+ * Bottom Screen filling each grid cell completely:
+ * Grid 1 & 2 (2.0f): Date DD / MM (Day then Month)
+ * Grid 3 (1.0f): Day of Week (Huge 76sp font filling 100% of Grid 3)
+ * Grid 4 (1.0f): Moon Icon filling top of Grid 4 + Name on bottom
+ * Grid 5 (1.0f): Flat Battery Percentage text (Huge 52sp font, no outline icon)
  */
 @Composable
 fun BottomInfoScreen(
@@ -448,30 +506,35 @@ fun BottomInfoScreen(
         modifier = modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .padding(vertical = 12.dp, horizontal = 8.dp),
+            .padding(vertical = 8.dp, horizontal = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Date: MM/DD
+        // Grid 1 & 2: Date Section DD/MM (Occupies 2 Grid Units = 2.0f)
         Row(
             modifier = Modifier
-                .weight(1.1f)
-                .padding(vertical = 4.dp),
+                .weight(2.0f)
+                .fillMaxHeight()
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
+            // Day Tens
             SevenSegmentDigit(
-                digitChar = clockState.month.getOrElse(0) { '0' },
+                digitChar = clockState.dayOfMonth.getOrElse(0) { '0' },
                 modifier = Modifier
-                    .height(30.dp)
-                    .width(18.dp)
+                    .weight(1f)
+                    .fillMaxHeight(0.85f)
+                    .aspectRatio(0.50f)
             )
             Spacer(modifier = Modifier.width(2.dp))
+            // Day Units
             SevenSegmentDigit(
-                digitChar = clockState.month.getOrElse(1) { '0' },
+                digitChar = clockState.dayOfMonth.getOrElse(1) { '0' },
                 modifier = Modifier
-                    .height(30.dp)
-                    .width(18.dp)
+                    .weight(1f)
+                    .fillMaxHeight(0.85f)
+                    .aspectRatio(0.50f)
             )
 
             Text(
@@ -479,41 +542,45 @@ fun BottomInfoScreen(
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
+                    fontSize = 36.sp,
                     color = LcdActiveColor
                 ),
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
 
+            // Month Tens
             SevenSegmentDigit(
-                digitChar = clockState.dayOfMonth.getOrElse(0) { '0' },
+                digitChar = clockState.month.getOrElse(0) { '0' },
                 modifier = Modifier
-                    .height(30.dp)
-                    .width(18.dp)
+                    .weight(1f)
+                    .fillMaxHeight(0.85f)
+                    .aspectRatio(0.50f)
             )
             Spacer(modifier = Modifier.width(2.dp))
+            // Month Units
             SevenSegmentDigit(
-                digitChar = clockState.dayOfMonth.getOrElse(1) { '0' },
+                digitChar = clockState.month.getOrElse(1) { '0' },
                 modifier = Modifier
-                    .height(30.dp)
-                    .width(18.dp)
+                    .weight(1f)
+                    .fillMaxHeight(0.85f)
+                    .aspectRatio(0.50f)
             )
         }
 
-        // Section Divider
+        // Section Divider 1
         Box(
             modifier = Modifier
                 .width(1.5.dp)
-                .fillMaxHeight()
-                .padding(vertical = 2.dp)
-                .background(LcdActiveColor.copy(alpha = 0.25f))
+                .fillMaxHeight(0.85f)
+                .background(LcdActiveColor.copy(alpha = 0.3f))
         )
 
-        // 2. Day of Week: 3-letter abbreviation
+        // Grid 3: Day of Week Section (Huge 76sp font filling 100% of Grid 3)
         Box(
             modifier = Modifier
-                .weight(0.7f)
-                .padding(vertical = 4.dp),
+                .weight(1.0f)
+                .fillMaxHeight()
+                .padding(2.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -521,43 +588,77 @@ fun BottomInfoScreen(
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Black,
-                    fontSize = 22.sp,
+                    fontSize = 76.sp,
                     color = LcdActiveColor
                 ),
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         }
 
-        // Section Divider
+        // Section Divider 2
         Box(
             modifier = Modifier
                 .width(1.5.dp)
-                .fillMaxHeight()
-                .padding(vertical = 2.dp)
-                .background(LcdActiveColor.copy(alpha = 0.25f))
+                .fillMaxHeight(0.85f)
+                .background(LcdActiveColor.copy(alpha = 0.3f))
         )
 
-        // 3. Moon Phase: Visual moon icon + short descriptor
-        Row(
+        // Grid 4: Moon Phase Section (Expanded Moon Icon filling top of Grid 4 + Name on bottom)
+        Column(
             modifier = Modifier
-                .weight(1.2f)
-                .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+                .weight(1.0f)
+                .fillMaxHeight()
+                .padding(horizontal = 2.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             MoonIcon(
                 phaseRatio = clockState.moonPhase.phaseRatio,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(0.85f)
+                    .aspectRatio(1f, matchHeightConstraintsFirst = true)
             )
-            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = clockState.moonPhase.descriptor,
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
+                    fontSize = 18.sp,
                     color = LcdActiveColor
-                )
+                ),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // Section Divider 3
+        Box(
+            modifier = Modifier
+                .width(1.5.dp)
+                .fillMaxHeight(0.85f)
+                .background(LcdActiveColor.copy(alpha = 0.3f))
+        )
+
+        // Grid 5: Flat Battery Percentage Section (Huge 52sp font, no outline icon)
+        Box(
+            modifier = Modifier
+                .weight(1.0f)
+                .fillMaxHeight()
+                .padding(2.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (clockState.isCharging) "${clockState.batteryLevel}%⚡" else "${clockState.batteryLevel}%",
+                style = TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 52.sp,
+                    color = LcdActiveColor
+                ),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -565,19 +666,19 @@ fun BottomInfoScreen(
 
 /**
  * Main DeskClockScreen composable.
- * Uses top-of-minute alignment (`:00` boundary) via coroutine suspend `delay(delayMs)`.
  */
 @Composable
 fun DeskClockScreen(
     modifier: Modifier = Modifier
 ) {
-    var clockState by remember { mutableStateOf(calculateCurrentClockState()) }
+    val context = LocalContext.current
+    var clockState by remember { mutableStateOf(calculateCurrentClockState(context)) }
 
     // Efficient suspended update loop aligning strictly to the top of each minute boundary
     LaunchedEffect(Unit) {
         while (isActive) {
             val now = System.currentTimeMillis()
-            clockState = calculateCurrentClockState(now)
+            clockState = calculateCurrentClockState(context, now)
             // Milliseconds remaining until next minute boundary :00.000 ms
             val delayMs = 60000L - (now % 60000L)
             delay(delayMs)
@@ -592,48 +693,50 @@ fun DeskClockScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF111111))
-            .padding(16.dp),
+            .background(Color(0xFF111111)) // Ambient outer dark background
+            .padding(horizontal = 16.dp, vertical = 12.dp) // Outer margin from physical screen edges
+            .offset(x = shiftX, y = shiftY),
         contentAlignment = Alignment.Center
     ) {
-        // Physical LCD desk clock bezel enclosure with hourly micro-shift
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(x = shiftX, y = shiftY)
-                .padding(8.dp),
+            modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(16.dp),
             color = LcdActiveColor,
-            border = androidx.compose.foundation.BorderStroke(3.dp, Color(0xFF333333)),
+            border = BorderStroke(4.dp, Color(0xFF333333)),
             shadowElevation = 8.dp
         ) {
             Column(
                 modifier = Modifier
-                    .padding(10.dp)
-                    .background(LcdPanelBackground, RoundedCornerShape(8.dp))
-                    .border(2.dp, LcdActiveColor, RoundedCornerShape(8.dp))
+                    .fillMaxSize()
+                    .padding(12.dp) // Inner LCD frame bezel padding
+                    .background(LcdPanelBackground, RoundedCornerShape(10.dp))
+                    .border(2.5.dp, LcdActiveColor, RoundedCornerShape(10.dp))
             ) {
                 // Top Screen: Time HH MM
                 TopTimeScreen(
                     hours = clockState.hours,
                     minutes = clockState.minutes,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1.8f)
                 )
 
                 // Middle Divider Bar
                 MiddleDividerBar()
 
-                // Bottom Screen: Date, Day of Week, Moon Phase
+                // Bottom Screen: Date (DD/MM) | Day | Moon Phase | Battery
                 BottomInfoScreen(
                     clockState = clockState,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1.1f)
                 )
             }
         }
     }
 }
 
-@Preview(showBackground = true, widthDp = 480, heightDp = 320)
+@Preview(showBackground = true, widthDp = 800, heightDp = 600)
 @Composable
 fun DeskClockScreenPreview() {
     DeskClockScreen()

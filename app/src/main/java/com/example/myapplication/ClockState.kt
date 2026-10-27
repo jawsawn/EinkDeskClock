@@ -13,5 +13,7 @@ data class ClockState(
     val month: String,        // 2-digit month "01".."12"
     val dayOfMonth: String,   // 2-digit day of month "01".."31"
     val dayOfWeek: String,    // 3-letter day abbreviation "MON", "TUE", etc.
-    val moonPhase: MoonPhase  // Calculated mathematical moon phase
+    val moonPhase: MoonPhase, // Calculated mathematical moon phase
+    val batteryLevel: Int,    // Battery percentage 0..100
+    val isCharging: Boolean,  // True if plugged in / charging
 )
