@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF111111),
+                    color = Color(0xFF141414),
                 ) {
                     DeskClockScreen()
                 }
