@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 7-segment Digital Time Display "12 00" -->
+
+    <!-- Digit 1 ('1') -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M35,34h3v16h-3z" />
+
+    <!-- Digit 2 ('2') -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M42,34h7v3h-7z M46,37h3v6h-3z M42,42h7v3h-7z M42,45h3v5h-3z M42,50h7v3h-7z" />
+
+    <!-- Center Space / Colon Dots -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M53,39h2v2h-2z M53,46h2v2h-2z" />
+
+    <!-- Digit 3 ('0') -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M57,34h7v3h-7z M57,37h3v13h-3z M61,37h3v13h-3z M57,50h7v3h-7z" />
+
+    <!-- Digit 4 ('0') -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M66,34h7v3h-7z M66,37h3v13h-3z M70,37h3v13h-3z M66,50h7v3h-7z" />
+
+    <!-- Middle Divider Bar -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M24,56h60v5h-60z" />
+
+    <!-- Moon Crescent Icon in Bottom Screen -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M66,66 A5,5 0 1,0 66,74 A3.5,3.5 0 0,1 66,66 Z" />
+
+    <!-- Date Text Placeholder / Indicator Lines -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M32,67h12v2h-12z M32,71h16v2h-16z" />
+</vector>

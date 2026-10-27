@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer ambient dark background -->
+    <path
+        android:fillColor="#111111"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <!-- Clock Outer Frame Bezel -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M24,24h60a8,8 0 0 1 8,8v44a8,8 0 0 1 -8,8h-60a8,8 0 0 1 -8,-8v-44a8,8 0 0 1 8,-8z" />
+
+    <!-- LCD Panel Screen (#DCDED5) -->
+    <path
+        android:fillColor="#DCDED5"
+        android:pathData="M28,28h52a4,4 0 0 1 4,4v36a4,4 0 0 1 -4,4h-52a4,4 0 0 1 -4,-4v-36a4,4 0 0 1 4,-4z" />
+</vector>
